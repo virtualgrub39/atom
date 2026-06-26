@@ -39,6 +39,8 @@ impl Assembler {
     pub fn add(self) -> Self { self.op(Opcode::Add) }
     pub fn join(self) -> Self { self.op(Opcode::Join) }
     pub fn cons(self) -> Self { self.op(Opcode::Cons) }
+    pub fn head(self) -> Self { self.op(Opcode::Head) }
+    pub fn tail(self) -> Self { self.op(Opcode::Tail) }
     pub fn out(self) -> Self { self.op(Opcode::Out) }
     pub fn drop(self) -> Self { self.op(Opcode::Drop) }
     pub fn dup(self) -> Self { self.op(Opcode::Dup) }

@@ -1,7 +1,10 @@
 pub mod assembler;
 pub mod bytecode;
+pub mod interpreter;
+pub use assembler::Assembler;
+pub use interpreter::Interpreter;
 
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use num_enum::TryFromPrimitiveError;
 use thiserror::Error;
@@ -33,6 +36,25 @@ pub enum Atom {
     Blob(Vec<u8>),
     Str(String),
     Num(f64),
+}
+
+impl fmt::Display for Atom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Atom::Nil => write!(f, "nil"),
+            Atom::Cons(car, cdr) => write!(f, "({} . {})", car, cdr),
+            Atom::Blob(bytes) => {
+                write!(f, "#[")?;
+                for (i, byte) in bytes.iter().enumerate() {
+                    if i > 0 { write!(f, " ")?; }
+                    write!(f, "{:02x}", byte)?;
+                }
+                write!(f, "]")
+            }
+            Atom::Str(s) => write!(f, "{}", s),
+            Atom::Num(n) => write!(f, "{}", n),
+        }
+    }
 }
 
 pub type AtomRef = Rc<Atom>;
@@ -81,6 +103,8 @@ pub enum Opcode {
     Add,
     Join,
     Cons,
+    Head,
+    Tail,
     Out,
     PushEnv,
     IfThenElse,
@@ -93,5 +117,5 @@ pub enum Opcode {
     FetchRet,
     DropRet,
     This,
-    Halt
+    Halt,
 }
