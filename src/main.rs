@@ -1,120 +1,8 @@
 use std::{collections::HashMap, rc::Rc};
 
-use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
-use thiserror::Error;
+mod atom;
 
-#[derive(Debug, Error)]
-pub enum AtomError {
-    #[error("Malformed bytecode")]
-    MalformedBytecode,
-    #[error("Data stack underflow")]
-    StackUnderflow,
-    #[error("Type missmatch")]
-    TypeMismatch,
-    #[error("Invalid environment reference: {0}")]
-    InvalidEnvId(u16),
-    #[error("Invalid opcode")]
-    InvalidOpcode(#[from] TryFromPrimitiveError<Opcode>),
-}
-
-pub type AtomResult<T> = Result<T, AtomError>;
-
-#[derive(Debug)]
-pub enum Atom {
-    Nil,
-    Cons(AtomRef, AtomRef),
-    Blob(Vec<u8>),
-    Num(f64),
-}
-
-pub type AtomRef = Rc<Atom>;
-
-impl Atom {
-    pub fn nil() -> AtomRef {
-        Rc::new(Atom::Nil)
-    }
-
-    pub fn cons(head: AtomRef, tail: AtomRef) -> AtomRef {
-        Rc::new(Atom::Cons(head, tail))
-    }
-
-    pub fn blob(blob: Vec<u8>) -> AtomRef {
-        Rc::new(Atom::Blob(blob))
-    }
-
-    pub fn num(num: f64) -> AtomRef {
-        Rc::new(Atom::Num(num))
-    }
-
-    pub fn truthful(&self) -> bool {
-        match self {
-            Self::Nil => false,
-            Self::Cons(_, _) => false,
-            Self::Blob(b) => !b.is_empty(),
-            Self::Num(n) => *n != 0.,
-        }
-    }
-}
-
-#[derive(TryFromPrimitive)]
-#[repr(u8)]
-pub enum Opcode {
-    Add,
-    Out,
-    PushEnv,
-    IfThenElse,
-    Dup,
-    WhileDo,
-    DoTimes,
-}
-
-pub trait Readable: Sized {
-    const SIZE: usize;
-    fn from_bytes(bytes: &[u8]) -> Self;
-}
-
-impl Readable for u8 {
-    const SIZE: usize = 1;
-    fn from_bytes(bytes: &[u8]) -> Self {
-        bytes[0]
-    }
-}
-
-impl Readable for u16 {
-    const SIZE: usize = 2;
-    fn from_bytes(bytes: &[u8]) -> Self {
-        u16::from_le_bytes([bytes[0], bytes[1]])
-    }
-}
-pub struct ByteReader<'a> {
-    data: &'a [u8],
-}
-
-impl<'a> ByteReader<'a> {
-    pub fn new(data: &'a [u8]) -> ByteReader<'a> {
-        return Self { data };
-    }
-
-    pub fn fetch<T: Readable>(&mut self) -> AtomResult<T> {
-        if self.data.len() < T::SIZE {
-            return Err(AtomError::MalformedBytecode);
-        }
-
-        let (bytes, rest) = self.data.split_at(T::SIZE);
-        self.data = rest;
-        Ok(T::from_bytes(bytes))
-    }
-
-    pub fn fetch_vec(&mut self, n: usize) -> AtomResult<Vec<u8>> {
-        if self.data.len() < n {
-            return Err(AtomError::MalformedBytecode);
-        }
-
-        let (bytes, rest) = self.data.split_at(n);
-        self.data = rest;
-        Ok(bytes.to_vec())
-    }
-}
+use atom::{Atom, AtomError, AtomRef, AtomResult, Opcode, assembler::Assembler, bytecode};
 
 struct ExecFrame {
     bytecode_atom: AtomRef,
@@ -132,21 +20,23 @@ impl ExecFrame {
 
 struct Interpreter {
     stack: Vec<AtomRef>,
+    ret_stack: Vec<AtomRef>,
     exec_stack: Vec<ExecFrame>,
-    env: HashMap<u16, AtomRef>,
+    env: HashMap<Rc<str>, AtomRef>,
 }
 
 impl Interpreter {
     pub fn new() -> Interpreter {
         Self {
             stack: Vec::new(),
+            ret_stack: Vec::new(),
             exec_stack: Vec::new(),
             env: HashMap::new(),
         }
     }
 
-    pub fn register(&mut self, id: u16, a: AtomRef) {
-        self.env.insert(id, a);
+    pub fn register(&mut self, id: &str, a: AtomRef) {
+        self.env.insert(id.into(), a);
     }
 
     fn pop(&mut self) -> AtomResult<AtomRef> {
@@ -170,7 +60,7 @@ impl Interpreter {
         while let Some(atom) = work.pop() {
             match &*atom {
                 Atom::Nil => {}
-                Atom::Num(_) => self.stack.push(atom),
+                Atom::Num(_) | Atom::Str(_) => self.stack.push(atom),
                 Atom::Cons(head, tail) => {
                     work.push(tail.clone());
                     work.push(head.clone());
@@ -185,6 +75,7 @@ impl Interpreter {
         Ok(())
     }
 
+    /// executes the `Atom::Blob` contents as bytecode
     pub fn exec(&mut self) -> AtomResult<()> {
         let target_depth = self.exec_stack.len();
 
@@ -206,15 +97,15 @@ impl Interpreter {
                 continue;
             }
 
-            let mut reader = ByteReader::new(&bytes[ip..]);
-            let initial_len = reader.data.len();
+            let mut reader = bytecode::Reader::new(&bytes[ip..]);
+            let initial_len = reader.len();
 
             let op_byte = reader.fetch::<u8>()?;
             let op = Opcode::try_from(op_byte)?;
 
             self.execute_op(op, &mut reader)?;
 
-            let consumed = initial_len - reader.data.len();
+            let consumed = initial_len - reader.len();
             if let Some(frame) = self.exec_stack.get_mut(frame_idx) {
                 frame.ip += consumed;
             }
@@ -223,12 +114,54 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_op(&mut self, op: Opcode, reader: &mut ByteReader) -> AtomResult<()> {
+    fn execute_op(&mut self, op: Opcode, reader: &mut bytecode::Reader) -> AtomResult<()> {
         match op {
+            Opcode::Eval => {
+                let a = self.pop()?;
+                match &*a {
+                    Atom::Blob(_) => {
+                        self.exec_stack.push(ExecFrame::new(a));
+                        Ok(())
+                    }
+                    _ => self.eval(a),
+                }
+            }
             Opcode::Add => {
                 let b = self.pop_num()?;
                 let a = self.pop_num()?;
                 self.push_num(a + b);
+                Ok(())
+            }
+            Opcode::Join => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+
+                match (&*a, &*b) {
+                    (Atom::Blob(a), Atom::Blob(b)) => {
+                        let mut joined = Vec::with_capacity(a.len() + b.len());
+                        joined.extend(a);
+                        joined.extend(b);
+
+                        self.stack.push(Atom::blob(joined));
+
+                        Ok(())
+                    }
+                    (Atom::Str(a), Atom::Str(b)) => {
+                        let mut joined = String::with_capacity(a.len() + b.len());
+                        joined.push_str(a);
+                        joined.push_str(b);
+
+                        self.stack.push(Atom::string(joined));
+
+                        Ok(())
+                    }
+                    _ => Err(AtomError::TypeMismatch),
+                }
+            }
+            Opcode::Cons => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                self.stack.push(Atom::cons(b.clone(), a.clone()));
                 Ok(())
             }
             Opcode::Out => {
@@ -237,8 +170,15 @@ impl Interpreter {
                 Ok(())
             }
             Opcode::PushEnv => {
-                let id = reader.fetch::<u16>()?;
-                let a = self.env.get(&id).ok_or(AtomError::InvalidEnvId(id))?;
+                // let id = reader.fetch::<u16>()?;
+                // let a = self.env.get(&id).ok_or(AtomError::InvalidEnvId(id))?;
+                let id = reader.fetch_str()?;
+                let id_ref: Rc<str> = Rc::from(id);
+                let a = self
+                    .env
+                    .get(&id_ref)
+                    .ok_or(AtomError::InvalidEnvId(id_ref))?;
+
                 self.stack.push(a.clone());
                 Ok(())
             }
@@ -247,10 +187,13 @@ impl Interpreter {
                 let then_body = self.pop()?;
                 let condition = self.pop()?.truthful();
 
-                if condition {
-                    self.eval(then_body)
-                } else {
-                    self.eval(else_body)
+                let target = if condition { then_body } else { else_body };
+                match &*target {
+                    Atom::Blob(_) => {
+                        self.exec_stack.push(ExecFrame::new(target));
+                        Ok(())
+                    }
+                    _ => self.eval(target),
                 }
             }
             Opcode::Dup => {
@@ -285,6 +228,36 @@ impl Interpreter {
 
                 Ok(())
             }
+            Opcode::Drop => self.pop().map(|_| ()),
+            Opcode::ToRet => {
+                let count = reader.fetch::<u16>()? as usize;
+                for _ in 0..count {
+                    let v = self.pop()?;
+                    self.ret_stack.push(v);
+                }
+                Ok(())
+            }
+            Opcode::FetchRet => {
+                let idx = reader.fetch::<u16>()? as usize;
+                let idx = self.ret_stack.len() - idx - 1;
+                let v = &self.ret_stack[idx];
+                self.stack.push(v.clone());
+                Ok(())
+            }
+            Opcode::DropRet => {
+                let count = reader.fetch::<u16>()? as usize;
+                for _ in 0..count {
+                    self.ret_stack.pop().ok_or(AtomError::RetStackUnderflow)?;
+                }
+                Ok(())
+            }
+            Opcode::This => {
+                let this = self.exec_stack.last().unwrap();
+                let this = &this.bytecode_atom;
+                self.stack.push(this.clone());
+                Ok(())
+            }
+            Opcode::Halt => Err(AtomError::Halt),
         }
     }
 }
@@ -292,39 +265,78 @@ impl Interpreter {
 fn main() -> AtomResult<()> {
     let mut vm = Interpreter::new();
 
-    vm.register(1, Atom::num(-1.));
-    vm.register(2, Atom::blob(vec![Opcode::Dup as u8]));
-    vm.register(
-        3,
-        Atom::blob(vec![
-            Opcode::Dup as u8,
-            Opcode::Out as u8,
-            Opcode::PushEnv as u8,
-            1,
-            0,
-            Opcode::Add as u8,
-        ]),
-    );
+    vm.register("-1", Atom::num(-1.));
+    vm.register("n", Atom::num(1e6)); // not that big...
+    vm.register("34", Atom::num(34.));
+    vm.register("35", Atom::num(35.));
+    vm.register("fn", Assembler::new().add().out().block());
+
+    // (defun fn (a b) (out (+ a b)))
+    // (fn (34 35))
+    vm.register("lispy_msg", Atom::str("lispy:"));
+    let lispy = Assembler::new()
+        .push_env("lispy_msg")
+        .out()
+        .push_env("fn")
+        .push_env("35")
+        .push_env("34")
+        .cons()
+        .cons()
+        .dup()
+        .out()
+        .eval()
+        .block();
+    vm.register("lispy", lispy);
+
+    // : fn + out ;
+    // 34 35 fn
+    vm.register("forthy_msg", Atom::str("forthy:"));
+    let forthy = Assembler::new()
+        .push_env("forthy_msg")
+        .out()
+        .push_env("34")
+        .push_env("35")
+        .push_env("fn")
+        .eval()
+        .block();
+    vm.register("forthy", forthy);
+
+    let recursive_else = Assembler::new().drop_ret(1).block();
+    let recursive_then = Assembler::new().fetch_ret(0).eval().drop_ret(1).block();
+    vm.register("recursive_else", recursive_else);
+    vm.register("recursive_then", recursive_then);
+
+    let recursive = Assembler::new()
+        .this()
+        .to_ret(1)
+        // .dup()
+        // .out()
+        .push_env("-1")
+        .add()
+        .dup()
+        .push_env("recursive_then")
+        .push_env("recursive_else")
+        .if_then_else()
+        .block();
+    vm.register("recursive", recursive);
 
     vm.register(
-        0,
-        Atom::blob(vec![
-            Opcode::PushEnv as u8,
-            2,
-            0,
-            Opcode::PushEnv as u8,
-            3,
-            0,
-            Opcode::WhileDo as u8,
-        ]),
+        "main",
+        Assembler::new()
+            .push_env("lispy")
+            .eval()
+            .push_env("forthy")
+            .eval()
+            .push_env("n")
+            .push_env("recursive")
+            .eval()
+            .drop()
+            .block(),
     );
 
-    vm.stack.push(Atom::num(10.));
-
-    if let Some(main) = vm.env.get(&0) {
+    if let Some(main) = vm.env.get("main") {
         vm.eval(main.clone())?;
     }
 
-    println!("Final Data Stack State: {:?}", vm.stack);
     Ok(())
 }
