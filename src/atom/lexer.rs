@@ -4,6 +4,33 @@ pub struct Span {
     pub end: usize,
 }
 
+impl Span {
+    pub fn to_location(&self, src: &str) -> (usize, usize) {
+        let mut line: usize = 1;
+        let mut column: usize = 1;
+        let mut prev = '\0';
+
+        for (i, c) in src.chars().enumerate() {
+            if i == self.start {
+                break;
+            }
+            match c {
+                '\n' if prev == '\r' => {}
+                '\r' | '\n' => {
+                    line += 1;
+                    column = 1;
+                }
+                _ => {
+                    column += 1;
+                }
+            }
+            prev = c;
+        }
+
+        (line, column)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum TokenKind {
     StringLiteral,
@@ -51,6 +78,34 @@ pub enum TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
+}
+
+pub struct TokenDisplay<'a> {
+    token: &'a Token,
+    src: &'a str,
+}
+
+use std::fmt;
+
+impl<'a> fmt::Display for TokenDisplay<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (line, col) = self.token.span.to_location(self.src);
+
+        let lexeme: String = self
+            .src
+            .chars()
+            .skip(self.token.span.start)
+            .take(self.token.span.end - self.token.span.start)
+            .collect();
+
+        write!(f, "{:?}({:?}) @ {}:{}", self.token.kind, lexeme, line, col)
+    }
+}
+
+impl Token {
+    pub fn display<'a>(&'a self, src: &'a str) -> TokenDisplay<'a> {
+        TokenDisplay { token: self, src }
+    }
 }
 
 pub struct Lexer<'a> {

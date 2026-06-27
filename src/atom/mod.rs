@@ -4,7 +4,7 @@ pub mod interpreter;
 pub use assembler::Assembler;
 pub use interpreter::Interpreter;
 pub mod lexer;
-pub use lexer::{Lexer, Token, TokenKind};
+pub use lexer::{Lexer, Token, TokenKind, Span};
 
 use std::{fmt, rc::Rc};
 
