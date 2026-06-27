@@ -1,8 +1,29 @@
 mod atom;
 
-use atom::{Assembler, Atom, AtomResult, Interpreter};
+use atom::{Assembler, Atom, AtomResult, Interpreter, Lexer};
+
+use std::env;
+use std::fs;
 
 fn main() -> AtomResult<()> {
+    let args: Vec<String> = env::args().collect();
+
+    let path = args.get(1).expect("Usage: <program> <source_file>");
+
+    assert!(
+        std::path::Path::new(path).exists(),
+        "File not found: {path}"
+    );
+
+    let src = fs::read_to_string(path).expect("Failed to read file");
+    let lexer = Lexer::new(&src);
+
+    for token in lexer {
+        println!("{:?}", token);
+    }
+
+    return Ok(());
+
     let mut vm = Interpreter::new();
 
     vm.register("-1", Atom::num(-1.));
@@ -10,8 +31,14 @@ fn main() -> AtomResult<()> {
     vm.register("34", Atom::num(34.));
     vm.register("35", Atom::num(35.));
     vm.register("CRLF", Atom::str("\r\n"));
-    vm.register("println", Assembler::new().out().push_env("CRLF").out().block());
-    vm.register("fn", Assembler::new().add().push_env("println").eval().block());
+    vm.register(
+        "println",
+        Assembler::new().out().push_env("CRLF").out().block(),
+    );
+    vm.register(
+        "fn",
+        Assembler::new().add().push_env("println").eval().block(),
+    );
 
     // (defun fn (a b) (out (+ a b)))
     // (fn (34 35))

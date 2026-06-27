@@ -1,0 +1,63 @@
+$println [ out "\r\n" out ]
+
+1 10 times [
+    dup string "I love Hatsune Miku x" over ++
+    #println ! -- '!' is shorthand for 'eval'
+    1+
+]
+drop
+
+$fib_linear [ 
+    >N -- pushes top of the stack into return stack, and binds a name to it
+
+    <N 2 lt if [
+        1
+    ] else [
+        1 1
+        <N 2 - times [
+            >B >A
+            <B
+            <B <A +
+        ] -- implicit drop_ret of bound values (Both A and B)
+        -- no cleanup required - return stack gets "fixed" after times block is done
+        nip
+    ]
+]
+
+20 #fib_linear! println!
+
+$fib_rec [
+    >N
+    this >rec
+    <N 2 <= if [
+        1
+    ] else [
+        <N 1 -
+        <rec! -- '!' here is also 'eval' - not some kind of special symbol
+        <N 2 -
+        <rec!
+        +
+    ]
+]
+
+20 #fib_rec! #println!
+
+$nil? [ nil = ]
+$decons [ dup head >H tail <H ]
+
+$reverse [
+    () swap
+
+    [ dup #nil?! not ] while [
+        #decons!
+        swap
+        >T
+        swap
+        cons
+        <T
+    ]
+
+    drop
+]
+
+(1 2 3) #reverse! #println!

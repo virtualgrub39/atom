@@ -3,6 +3,8 @@ pub mod bytecode;
 pub mod interpreter;
 pub use assembler::Assembler;
 pub use interpreter::Interpreter;
+pub mod lexer;
+pub use lexer::{Lexer, Token};
 
 use std::{fmt, rc::Rc};
 
