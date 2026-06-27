@@ -1,0 +1,13 @@
+$fib_rec [
+    >N
+    this >rec
+    <N 2 lte if [
+        1
+    ] else [
+        <N 1 -
+        <rec! -- '!' here is also 'eval' - not some kind of special symbol
+        <N 2 -
+        <rec!
+        +
+    ]
+]

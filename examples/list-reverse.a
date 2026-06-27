@@ -1,0 +1,13 @@
+$nil? [ nil eq ]
+$decons [ dup head >H tail <H ]
+
+$reverse [
+    () swap
+
+    [ dup #nil?! not ] while [
+        #decons! swap
+        >T swap :: <T
+    ]
+
+    drop
+]

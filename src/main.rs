@@ -1,9 +1,10 @@
 mod atom;
 
-use atom::{Assembler, Atom, AtomResult, Interpreter, Lexer};
+use atom::{Assembler, Atom, AtomResult, Interpreter, Lexer, TokenKind};
 
 use std::env;
 use std::fs;
+
 
 fn main() -> AtomResult<()> {
     let args: Vec<String> = env::args().collect();
@@ -16,9 +17,12 @@ fn main() -> AtomResult<()> {
     );
 
     let src = fs::read_to_string(path).expect("Failed to read file");
-    let lexer = Lexer::new(&src);
+    let mut lexer = Lexer::new(&src);
 
-    for token in lexer {
+    let parser_tokens = std::iter::from_fn(|| lexer.next_token())
+    .filter(|token| token.kind != TokenKind::Comment);
+
+    for token in parser_tokens {
         println!("{:?}", token);
     }
 

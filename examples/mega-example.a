@@ -24,12 +24,12 @@ $fib_linear [
     ]
 ]
 
-20 #fib_linear! println!
+20 #fib_linear! #println!
 
 $fib_rec [
     >N
     this >rec
-    <N 2 <= if [
+    <N 2 lte if [
         1
     ] else [
         <N 1 -
@@ -42,7 +42,7 @@ $fib_rec [
 
 20 #fib_rec! #println!
 
-$nil? [ nil = ]
+$nil? [ nil eq ]
 $decons [ dup head >H tail <H ]
 
 $reverse [
@@ -53,7 +53,7 @@ $reverse [
         swap
         >T
         swap
-        cons
+        ::
         <T
     ]
 

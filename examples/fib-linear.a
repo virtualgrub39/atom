@@ -1,0 +1,16 @@
+$fib_linear [ 
+    >N -- pushes top of the stack into return stack, and binds a name to it
+
+    <N 2 lt if [
+        1
+    ] else [
+        1 1
+        <N 2 - times [
+            >B >A
+            <B
+            <B <A +
+        ] -- implicit drop_ret of bound values (Both A and B)
+        -- no cleanup required - return stack gets "fixed" after times block is done
+        nip
+    ]
+]
