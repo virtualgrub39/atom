@@ -1,63 +1,9 @@
 mod atom;
 
-use atom::{Assembler, Atom, AtomResult, Interpreter, Lexer, TokenKind, Span};
+use atom::{Assembler, Atom, AtomError, AtomResult, Interpreter, Lexer, Span, Token, TokenKind, DisplayWithSrc};
 
 use std::env;
 use std::fs;
-
-#[derive(Debug, Clone)]
-pub struct Spanned<T> {
-    pub node: T,
-    pub span: Span,
-}
-
-#[derive(Debug)]
-pub struct Program {
-    pub nodes: Vec<Spanned<Node>>
-}
-
-#[derive(Debug)]
-pub enum Node {
-    Number(f64),
-    String(String),
-    Nil,
-
-    Builtin(Builtin),
-    
-    WordRef(String),
-    BindVar(String),
-    FetchVar(String),
-
-    Block(Vec<Spanned<Node>>),
-    List(Vec<Spanned<Node>>),
-
-    Define {
-        name: String,
-        body: Box<Spanned<Node>>,
-    },
-
-    If {
-        then_br: Box<Spanned<Node>>,
-        else_br: Box<Spanned<Node>>,
-    },
-
-    While {
-        cond: Box<Spanned<Node>>,
-        body: Box<Spanned<Node>>,
-    },
-
-    Times (Box<Spanned<Node>>),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Builtin {
-    Out, Times, Dup, Over, Lt, Lte, Eq, Not, Nip, Drop, This, StringCast, Head, Tail, Swap,
-    Add,       // +
-    Sub,       // -
-    Eval,      // !
-    Cons,      // ::
-    Join,      // ++
-}
 
 fn main() -> AtomResult<()> {
     let args: Vec<String> = env::args().collect();
@@ -78,6 +24,9 @@ fn main() -> AtomResult<()> {
     for token in parser_tokens {
         println!("{}", token.display(&src));
     }
+
+    let prog = atom::Program::parse(&src)?;
+    println!("{}", prog.display(&src));
 
     return Ok(());
 

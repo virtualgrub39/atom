@@ -1,10 +1,12 @@
-pub mod assembler;
+mod assembler;
 pub mod bytecode;
 pub mod interpreter;
 pub use assembler::Assembler;
 pub use interpreter::Interpreter;
-pub mod lexer;
+mod lexer;
 pub use lexer::{Lexer, Token, TokenKind, Span};
+mod parser;
+pub use parser::{Builtin, Node, Parser, Program, Spanned, DisplayWithSrc};
 
 use std::{fmt, rc::Rc};
 
@@ -27,6 +29,12 @@ pub enum AtomError {
     InvalidEnvId(Rc<str>),
     #[error("Invalid opcode")]
     InvalidOpcode(#[from] TryFromPrimitiveError<Opcode>),
+    #[error("Syntax error at {line}:{column}: {message}")]
+    SyntaxError {
+        message: String,
+        line: usize,
+        column: usize,
+    },
 }
 
 pub type AtomResult<T> = Result<T, AtomError>;
