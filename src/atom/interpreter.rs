@@ -243,6 +243,9 @@ impl Interpreter {
 
             Opcode::Add => self.apply_num_op(|a, b| a + b),
             Opcode::Sub => self.apply_num_op(|a, b| a - b),
+            Opcode::Mult => self.apply_num_op(|a, b| a * b),
+            Opcode::Div => self.apply_num_op(|a, b| a / b),
+            Opcode::Mod => self.apply_num_op(|a, b| a % b),
             Opcode::Lt => self.apply_cmp_op(|a, b| a < b),
             Opcode::Lte => self.apply_cmp_op(|a, b| a <= b),
             Opcode::Gt => self.apply_cmp_op(|a, b| a > b),

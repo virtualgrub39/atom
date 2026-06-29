@@ -75,6 +75,9 @@ pub enum TokenKind {
     Plus,
     Minus,
     Cons,
+    Asterisk,
+    Slash,
+    Percent,
 }
 
 #[derive(Debug)]
@@ -180,6 +183,18 @@ impl<'a> Lexer<'a> {
             '-' => {
                 self.bump();
                 TokenKind::Minus
+            }
+            '*' => {
+                self.bump();
+                TokenKind::Asterisk
+            }
+            '/' => {
+                self.bump();
+                TokenKind::Slash
+            }
+            '%' => {
+                self.bump();
+                TokenKind::Percent
             }
             '[' => {
                 self.bump();

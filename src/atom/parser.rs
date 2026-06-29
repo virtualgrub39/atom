@@ -70,6 +70,9 @@ pub enum Builtin {
     Swap,
     Add,  // +
     Sub,  // -
+    Mult, // *
+    Div,  // /
+    Mod,  // %
     Eval, // !
     Cons, // ::
     Join, // ++
@@ -252,6 +255,9 @@ impl<'a> Parser<'a> {
             TokenKind::Tail => Some(Builtin::Tail),
             TokenKind::Swap => Some(Builtin::Swap),
             TokenKind::Plus => Some(Builtin::Add),
+            TokenKind::Asterisk => Some(Builtin::Mult),
+            TokenKind::Slash => Some(Builtin::Div),
+            TokenKind::Percent => Some(Builtin::Mod),
             TokenKind::Minus => Some(Builtin::Sub),
             TokenKind::Bang => Some(Builtin::Eval),
             TokenKind::Cons => Some(Builtin::Cons),

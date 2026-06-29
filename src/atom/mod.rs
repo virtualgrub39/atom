@@ -152,6 +152,9 @@ pub enum Opcode {
 
     Add,
     Sub,
+    Mult,
+    Div,
+    Mod,
 
     Join,
     Cons,
@@ -194,6 +197,9 @@ impl From<Builtin> for Opcode {
         match value {
             Builtin::Add => Opcode::Add,
             Builtin::Sub => Opcode::Sub,
+            Builtin::Mult => Opcode::Mult,
+            Builtin::Div => Opcode::Div,
+            Builtin::Mod => Opcode::Mod,
             Builtin::Join => Opcode::Join,
             Builtin::Cons => Opcode::Cons,
             Builtin::Head => Opcode::Head,

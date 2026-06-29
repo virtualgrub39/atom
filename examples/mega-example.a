@@ -6,7 +6,7 @@ $println [ out "\r\n" out ]
     "I love Hatsune Miku x" <I string ++
     #println ! -- '!' is shorthand for 'eval'
     1 <I +
-] 10 times
+] 4 times
 drop
 
 $fib_linear [ 
@@ -55,3 +55,107 @@ $reverse [
 ]
 
 (1 2 3) #reverse! #println!
+
+$logged [
+    >target
+
+    [ "-> Starting execution\r\n" out ]
+    <target ++
+    [ "-> Finished execution\r\n" out ] ++
+]
+
+$logged_calc [[ 5 5 * #println! ] #logged!!]
+#logged_calc!
+
+$unroll [
+    >block >N
+    []
+    [ <block ++ ] <N times
+]
+
+$times8 [3 [dup +] #unroll!!]
+5 #times8! #println!
+
+$append [
+    >L2
+    this >rec
+
+    dup #nil?! if [ 
+        drop <L2 
+    ] else [
+        #decons! >H
+        <L2 <rec!
+        <H ::
+    ]
+]
+
+(1 2) (3 4) #append! #println!
+
+$range [ -- helper for examples, generates 1..n inclusive list
+    >n
+    () <n
+
+    [
+        >i
+        <i ::
+        <i 1 -
+    ] <n times
+
+    drop
+]
+
+$map [
+    >F
+    this >rec
+
+    dup #nil?! if
+        nil
+    else [
+        #decons! >H
+        <F <rec!
+        <H <F!
+        ::
+    ]
+]
+
+4 #range! [ 2 * ] #map! #println!
+
+$filter [
+    >P
+    this >rec
+
+    dup #nil?! if
+        nil
+    else [
+        #decons! >H
+        <H <P!
+
+        [ <P <rec! <H :: ]
+        [ <P <rec! ]
+        ifte
+    ]
+]
+
+$odd? [ 2 % 0 eq not ]
+10 #range! #odd? #filter! #println!
+
+$foldl [
+    >F >acc >L
+    this >rec
+    <L #nil?!
+    <acc
+    [
+        <L tail
+        <L head <acc <F !
+        <F <rec!
+    ]
+    ifte
+]
+
+10 #range! 0 [ + ] #foldl! #println!
+
+$factorial [
+    #range! 1 [ * ] #foldl!
+]
+
+6 #factorial! #println!
