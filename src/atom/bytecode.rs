@@ -1,6 +1,6 @@
 /// simple u8 buffer reader / writer utilities
 /// used for bytecode blob parsing and assembly
-use crate::atom::{AtomError, AtomResult, Opcode};
+use crate::atom::{AtomError, AtomResult, AtomTag, Opcode};
 
 pub trait Readable: Sized {
     const SIZE: usize;
@@ -110,12 +110,6 @@ impl Writable for u16 {
     }
 }
 
-impl Writable for Vec<u8> {
-    fn write_to(&self, buf: &mut Vec<u8>) {
-        buf.extend(self);
-    }
-}
-
 impl Writable for Opcode {
     fn write_to(&self, buf: &mut Vec<u8>) {
         buf.push(*self as u8);
@@ -129,6 +123,25 @@ impl Writable for &str {
         buf.extend_from_slice(self.as_bytes());
     }
 }
+
+impl Writable for AtomTag {
+    fn write_to(&self, buf: &mut Vec<u8>) {
+        buf.push(*self as u8)
+    }
+}
+
+impl Writable for f64 {
+    fn write_to(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&self.to_le_bytes());
+    }
+}
+
+impl Writable for u32 {
+    fn write_to(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&self.to_le_bytes());
+    }
+}
+
 
 pub struct Writer {
     buf: Vec<u8>,

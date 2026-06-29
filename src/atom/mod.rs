@@ -7,6 +7,8 @@ mod lexer;
 pub use lexer::{Lexer, Span, Token, TokenKind};
 mod parser;
 pub use parser::{Builtin, DisplayWithSrc, Node, Parser, Program, Spanned};
+mod compiler;
+pub use compiler::Compiler;
 
 use std::{fmt, rc::Rc};
 

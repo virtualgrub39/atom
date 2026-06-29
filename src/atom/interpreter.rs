@@ -43,7 +43,7 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn deserialize_atom(&mut self, reader: &mut bytecode::Reader) -> AtomResult<AtomRef> {
+    fn deserialize_atom(&mut self, reader: &mut bytecode::Reader) -> AtomResult<AtomRef> {
         let tag = reader.fetch::<u8>()?;
         let tag = AtomTag::try_from(tag).map_err(|_| AtomError::MalformedBytecode)?;
 
@@ -63,10 +63,56 @@ impl Interpreter {
                 Ok(Atom::cons(head, tail))
             }
             AtomTag::Blob => {
-                let bytes = reader.fetch_vec(reader.len())?;
+                let len = reader.fetch::<u32>()? as usize;
+                let bytes = reader.fetch_vec(len)?;
                 Ok(Atom::blob(bytes))
             }
         }
+    }
+
+    pub fn write_atom_file(&self) -> AtomResult<Vec<u8>> {
+        let mut writer = bytecode::Writer::new();
+        writer.write_bytes(b"ATOM");
+        writer.write::<u32>(self.env.len() as u32);
+
+        for (k, v) in self.env.iter() {
+            writer.write(k.as_ref());
+            self.serialize_atom(v.clone(), &mut writer)?;
+        }
+
+        Ok(writer.finish())
+    }
+
+    pub fn serialize_atom(
+        &self,
+        atom: AtomRef,
+        writer: &mut bytecode::Writer,
+    ) -> AtomResult<()> {
+        match &*atom {
+            Atom::Nil => {
+                writer.write::<AtomTag>(AtomTag::Nil);
+            }
+            Atom::Num(n) => {
+                writer.write::<AtomTag>(AtomTag::Num);
+                writer.write::<f64>(*n);
+            }
+            Atom::Blob(b) => {
+                writer.write::<AtomTag>(AtomTag::Blob);
+                writer.write::<u16>(b.len() as u16);
+                writer.write_bytes(b);
+            }
+            Atom::Cons(head, tail) => {
+                writer.write::<AtomTag>(AtomTag::Cons);
+                self.serialize_atom(head.clone(), writer)?;
+                self.serialize_atom(tail.clone(), writer)?;
+            }
+            Atom::Str(s) => {
+                writer.write::<AtomTag>(AtomTag::Cons);
+                writer.write(s.as_str());
+            }
+        }
+
+        Ok(())
     }
 
     pub fn import(&mut self, env: HashMap<Rc<str>, AtomRef>) {
