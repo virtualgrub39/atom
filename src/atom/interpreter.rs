@@ -52,6 +52,34 @@ impl Interpreter {
         self.stack.push(Atom::num(n));
     }
 
+    fn push_bool(&mut self, b: bool) {
+        self.stack.push(Atom::boolean(b));
+    }
+
+    fn apply_num_op(&mut self, op: impl FnOnce(f64, f64) -> f64) -> AtomResult<()> {
+        let b = self.pop_num()?;
+        let a = self.pop_num()?;
+        self.push_num(op(a, b));
+        Ok(())
+    }
+
+    fn apply_cmp_op(&mut self, op: impl FnOnce(f64, f64) -> bool) -> AtomResult<()> {
+        let b = self.pop_num()?;
+        let a = self.pop_num()?;
+        self.push_bool(op(a, b));
+        Ok(())
+    }
+
+    fn run(&mut self, atom: AtomRef) -> AtomResult<()> {
+        match &*atom {
+            Atom::Blob(_) => {
+                self.exec_stack.push(ExecFrame::new(atom));
+                Ok(())
+            }
+            _ => self.eval(atom),
+        }
+    }
+
     pub fn eval(&mut self, a: AtomRef) -> AtomResult<()> {
         let mut work: Vec<AtomRef> = vec![a];
 
@@ -69,11 +97,9 @@ impl Interpreter {
                 }
             }
         }
-
         Ok(())
     }
 
-    /// executes the `Atom::Blob` contents as bytecode
     pub fn exec(&mut self) -> AtomResult<()> {
         let target_depth = self.exec_stack.len();
 
@@ -108,49 +134,47 @@ impl Interpreter {
                 frame.ip += consumed;
             }
         }
-
         Ok(())
     }
 
     fn execute_op(&mut self, op: Opcode, reader: &mut bytecode::Reader) -> AtomResult<()> {
         match op {
-            Opcode::Eval => {
+            Opcode::Eval => self.pop().and_then(|a| self.run(a)),
+            Opcode::StringCast => self
+                .pop()
+                .map(|a| self.stack.push(Atom::string(a.to_string()))),
+
+            Opcode::Add => self.apply_num_op(|a, b| a + b),
+            Opcode::Sub => self.apply_num_op(|a, b| a - b),
+            Opcode::Lt => self.apply_cmp_op(|a, b| a < b),
+            Opcode::Lte => self.apply_cmp_op(|a, b| a <= b),
+            Opcode::Gt => self.apply_cmp_op(|a, b| a > b),
+            Opcode::Gte => self.apply_cmp_op(|a, b| a >= b),
+
+            Opcode::Eq => {
+                let b = self.pop()?;
                 let a = self.pop()?;
-                match &*a {
-                    Atom::Blob(_) => {
-                        self.exec_stack.push(ExecFrame::new(a));
-                        Ok(())
-                    }
-                    _ => self.eval(a),
-                }
-            }
-            Opcode::Add => {
-                let b = self.pop_num()?;
-                let a = self.pop_num()?;
-                self.push_num(a + b);
+                self.push_bool(a == b);
                 Ok(())
             }
+            Opcode::Not => self.pop().map(|a| self.push_bool(!a.truthful())),
+
             Opcode::Join => {
                 let b = self.pop()?;
                 let a = self.pop()?;
-
                 match (&*a, &*b) {
                     (Atom::Blob(a), Atom::Blob(b)) => {
                         let mut joined = Vec::with_capacity(a.len() + b.len());
                         joined.extend(a);
                         joined.extend(b);
-
                         self.stack.push(Atom::blob(joined));
-
                         Ok(())
                     }
                     (Atom::Str(a), Atom::Str(b)) => {
                         let mut joined = String::with_capacity(a.len() + b.len());
                         joined.push_str(a);
                         joined.push_str(b);
-
                         self.stack.push(Atom::string(joined));
-
                         Ok(())
                     }
                     _ => Err(AtomError::TypeMismatch),
@@ -159,95 +183,98 @@ impl Interpreter {
             Opcode::Cons => {
                 let b = self.pop()?;
                 let a = self.pop()?;
-                self.stack.push(Atom::cons(b.clone(), a.clone()));
+                self.stack.push(Atom::cons(b, a));
                 Ok(())
             }
-            Opcode::Head => {
-                let a = self.pop()?;
-                match &*a {
-                    Atom::Cons(head, _) => {
-                        self.stack.push(head.clone());
-                        Ok(())
-                    }
-                    _ => Err(AtomError::TypeMismatch)
+            Opcode::Head => match &*self.pop()? {
+                Atom::Cons(head, _) => {
+                    self.stack.push(head.clone());
+                    Ok(())
                 }
-            }
-            Opcode::Tail => {
-                let a = self.pop()?;
-                match &*a {
-                    Atom::Cons(_, tail) => {
-                        self.stack.push(tail.clone());
-                        Ok(())
-                    }
-                    _ => Err(AtomError::TypeMismatch)
+                _ => Err(AtomError::TypeMismatch),
+            },
+            Opcode::Tail => match &*self.pop()? {
+                Atom::Cons(_, tail) => {
+                    self.stack.push(tail.clone());
+                    Ok(())
                 }
-            }
-            Opcode::Out => {
-                let val = self.pop()?;
-                print!("{val}");
-                Ok(())
-            }
+                _ => Err(AtomError::TypeMismatch),
+            },
+            Opcode::Out => self.pop().map(|val| print!("{val}")),
             Opcode::PushEnv => {
-                let id = reader.fetch_str()?;
-                let id_ref: Rc<str> = Rc::from(id);
+                let id_ref: Rc<str> = Rc::from(reader.fetch_str()?);
                 let a = self
                     .env
                     .get(&id_ref)
-                    .ok_or(AtomError::InvalidEnvId(id_ref))?;
-
+                    .ok_or_else(|| AtomError::InvalidEnvId(id_ref))?;
                 self.stack.push(a.clone());
                 Ok(())
             }
             Opcode::IfThenElse => {
                 let else_body = self.pop()?;
                 let then_body = self.pop()?;
-                let condition = self.pop()?.truthful();
-
-                let target = if condition { then_body } else { else_body };
-                match &*target {
-                    Atom::Blob(_) => {
-                        self.exec_stack.push(ExecFrame::new(target));
-                        Ok(())
-                    }
-                    _ => self.eval(target),
+                let target = if self.pop()?.truthful() {
+                    then_body
+                } else {
+                    else_body
+                };
+                self.run(target)
+            }
+            Opcode::IfThen => {
+                let then_body = self.pop()?;
+                if self.pop()?.truthful() {
+                    self.run(then_body)
+                } else {
+                    Ok(())
                 }
             }
             Opcode::Dup => {
-                let top = self.stack.last().ok_or(AtomError::StackUnderflow)?;
-                self.stack.push(top.clone());
+                let top = self
+                    .stack
+                    .last()
+                    .cloned()
+                    .ok_or(AtomError::StackUnderflow)?;
+                self.stack.push(top);
+                Ok(())
+            }
+            Opcode::Over => {
+                let len = self.stack.len();
+                if len < 2 {
+                    return Err(AtomError::StackUnderflow);
+                }
+                let a = self.stack[len - 2].clone();
+                self.stack.push(a);
+                Ok(())
+            }
+            Opcode::Nip => {
+                let b = self.pop()?;
+                self.pop()?;
+                self.stack.push(b);
                 Ok(())
             }
             Opcode::WhileDo => {
                 let body = self.pop()?;
                 let cond = self.pop()?;
-
                 loop {
                     self.eval(cond.clone())?;
-
-                    let cond_result = self.pop()?;
-                    if !cond_result.truthful() {
+                    if !self.pop()?.truthful() {
                         break;
                     }
-
                     self.eval(body.clone())?;
                 }
-
                 Ok(())
             }
             Opcode::DoTimes => {
                 let times = self.pop_num()?;
                 let body = self.pop()?;
-
                 for _ in 0..times as u32 {
                     self.eval(body.clone())?;
                 }
-
                 Ok(())
             }
             Opcode::Drop => self.pop().map(|_| ()),
             Opcode::ToRet => {
-                let count = reader.fetch::<u16>()? as usize;
-                for _ in 0..count {
+                for _ in 0..reader.fetch::<u16>()? {
                     let v = self.pop()?;
                     self.ret_stack.push(v);
                 }
@@ -255,22 +282,28 @@ impl Interpreter {
             }
             Opcode::FetchRet => {
                 let idx = reader.fetch::<u16>()? as usize;
-                let idx = self.ret_stack.len() - idx - 1;
-                let v = &self.ret_stack[idx];
-                self.stack.push(v.clone());
+                let idx = self
+                    .ret_stack
+                    .len()
+                    .checked_sub(idx + 1)
+                    .ok_or(AtomError::RetStackUnderflow)?;
+                let v = self
+                    .ret_stack
+                    .get(idx)
+                    .ok_or(AtomError::RetStackUnderflow)?
+                    .clone();
+                self.stack.push(v);
                 Ok(())
             }
             Opcode::DropRet => {
-                let count = reader.fetch::<u16>()? as usize;
-                for _ in 0..count {
+                for _ in 0..reader.fetch::<u16>()? {
                     self.ret_stack.pop().ok_or(AtomError::RetStackUnderflow)?;
                 }
                 Ok(())
             }
             Opcode::This => {
-                let this = self.exec_stack.last().unwrap();
-                let this = &this.bytecode_atom;
-                self.stack.push(this.clone());
+                let this = self.exec_stack.last().ok_or(AtomError::MalformedBytecode)?;
+                self.stack.push(this.bytecode_atom.clone());
                 Ok(())
             }
             Opcode::Halt => Err(AtomError::Halt),

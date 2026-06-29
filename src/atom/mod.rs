@@ -4,9 +4,9 @@ pub mod interpreter;
 pub use assembler::Assembler;
 pub use interpreter::Interpreter;
 mod lexer;
-pub use lexer::{Lexer, Token, TokenKind, Span};
+pub use lexer::{Lexer, Span, Token, TokenKind};
 mod parser;
-pub use parser::{Builtin, Node, Parser, Program, Spanned, DisplayWithSrc};
+pub use parser::{Builtin, DisplayWithSrc, Node, Parser, Program, Spanned};
 
 use std::{fmt, rc::Rc};
 
@@ -39,7 +39,7 @@ pub enum AtomError {
 
 pub type AtomResult<T> = Result<T, AtomError>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Atom {
     Nil,
     Cons(AtomRef, AtomRef),
@@ -56,7 +56,9 @@ impl fmt::Display for Atom {
             Atom::Blob(bytes) => {
                 write!(f, "#[")?;
                 for (i, byte) in bytes.iter().enumerate() {
-                    if i > 0 { write!(f, " ")?; }
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
                     write!(f, "{:02x}", byte)?;
                 }
                 write!(f, "]")
@@ -94,6 +96,10 @@ impl Atom {
         Rc::new(Atom::Str(s.to_string()))
     }
 
+    pub fn boolean(b: bool) -> AtomRef {
+        Rc::new(Atom::Num(b.into()))
+    }
+
     pub fn truthful(&self) -> bool {
         match self {
             Self::Nil => false,
@@ -110,22 +116,42 @@ use num_enum::TryFromPrimitive;
 #[derive(TryFromPrimitive, Clone, Copy)]
 #[repr(u8)]
 pub enum Opcode {
+    PushEnv,
+
     Add,
+    Sub,
+
     Join,
     Cons,
     Head,
     Tail,
+
+    This,
+
     Out,
-    PushEnv,
-    IfThenElse,
-    Dup,
+
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+    Eq,
+    Not,
+
     Eval,
+    IfThenElse,
+    IfThen,
     WhileDo,
     DoTimes,
-    Drop,
+    Halt,
+
     ToRet,
     FetchRet,
     DropRet,
-    This,
-    Halt,
+
+    StringCast,
+
+    Dup,
+    Over,
+    Nip,
+    Drop,
 }

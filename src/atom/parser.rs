@@ -93,7 +93,6 @@ impl<'a> Parser<'a> {
     fn parse_token(
         &mut self,
         token: Token,
-        current_stream: &mut Vec<SpannedNode>,
     ) -> AtomResult<SpannedNode> {
         let start_span = token.span;
 
@@ -188,8 +187,7 @@ impl<'a> Parser<'a> {
             column: 0,
         })?;
 
-        let mut secondary_stream = Vec::new();
-        self.parse_token(next_tok, &mut secondary_stream)
+        self.parse_token(next_tok)
     }
 
     fn match_builtin(&self, kind: TokenKind) -> Option<Builtin> {
@@ -262,7 +260,7 @@ impl<'a> Parser<'a> {
             }
 
             let token = self.next_token().unwrap();
-            let spanned_node = self.parse_token(token, &mut nodes)?;
+            let spanned_node = self.parse_token(token)?;
             nodes.push(spanned_node);
         }
 
