@@ -31,6 +31,14 @@ pub enum AtomError {
     InvalidOpcode(#[from] TryFromPrimitiveError<Opcode>),
     #[error("Invalid magic number")]
     InvalidMagic,
+    #[error("Node could not be mapped to an atom")]
+    UnmappableNode,
+    #[error("Unbound variable: {0}")]
+    UnboundVariable(String),
+    #[error("Invalid escape sequence at index {index}: '\\{ch}'")]
+    InvalidEscape { index: usize, ch: char },
+    #[error("Trailing backslash in string literal")]
+    TrailingBackslash,
     #[error("Syntax error at {line}:{column}: {message}")]
     SyntaxError {
         message: String,
@@ -173,7 +181,48 @@ pub enum Opcode {
     StringCast,
 
     Dup,
+    Swap,
     Over,
     Nip,
     Drop,
+}
+
+impl From<Builtin> for Opcode {
+    fn from(value: Builtin) -> Self {
+        match value {
+            Builtin::Add => Opcode::Add,
+            Builtin::Sub => Opcode::Sub,
+            Builtin::Join => Opcode::Join,
+            Builtin::Cons => Opcode::Cons,
+            Builtin::Head => Opcode::Head,
+            Builtin::Tail => Opcode::Tail,
+            Builtin::This => Opcode::This,
+            Builtin::Out => Opcode::Out,
+            Builtin::Lt => Opcode::Lt,
+            Builtin::Lte => Opcode::Lte,
+            Builtin::Gt => Opcode::Gt,
+            Builtin::Gte => Opcode::Gte,
+            Builtin::Eq => Opcode::Eq,
+            Builtin::Not => Opcode::Not,
+            Builtin::Eval => Opcode::Eval,
+            Builtin::IfThenElse => Opcode::IfThenElse,
+            Builtin::IfThen => Opcode::IfThen,
+            Builtin::WhileDo => Opcode::WhileDo,
+            Builtin::Times => Opcode::DoTimes,
+            // Builtin::Halt => Opcode::Halt,
+
+            // Builtin::ToRet => Opcode::ToRet,
+            // Builtin::FetchRet => Opcode::FetchRet,
+            // Builtin::DropRet => Opcode::DropRet,
+
+            Builtin::StringCast => Opcode::StringCast,
+
+            Builtin::Dup => Opcode::Dup,
+            Builtin::Swap => Opcode::Swap,
+            Builtin::Over => Opcode::Over,
+            Builtin::Nip => Opcode::Nip,
+            Builtin::Drop => Opcode::Drop,
+
+        }
+    }
 }

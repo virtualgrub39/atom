@@ -69,6 +69,12 @@ impl Interpreter {
         }
     }
 
+    pub fn import(&mut self, env: HashMap<Rc<str>, AtomRef>) {
+        for (key, value) in env {
+            self.env.insert(key, value);
+        }
+    }
+
     pub fn new() -> Interpreter {
         Self {
             stack: Vec::new(),
@@ -295,6 +301,13 @@ impl Interpreter {
                 let b = self.pop()?;
                 self.pop()?;
                 self.stack.push(b);
+                Ok(())
+            }
+            Opcode::Swap => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                self.stack.push(b);
+                self.stack.push(a);
                 Ok(())
             }
             Opcode::WhileDo => {

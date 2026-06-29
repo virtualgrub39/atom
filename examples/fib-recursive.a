@@ -7,3 +7,5 @@ $fib_rec [
     [ <N 1 - <rec! <N 2- <rec! + ] -- else
     ifte -- postfix conditional. `ift` for no-else variant
 ]
+
+25 #fib_rec! out

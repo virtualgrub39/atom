@@ -57,6 +57,8 @@ pub enum Builtin {
     Over,
     Lt,
     Lte,
+    Gt,
+    Gte,
     Eq,
     Not,
     Nip,
@@ -90,10 +92,45 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_token(
-        &mut self,
-        token: Token,
-    ) -> AtomResult<SpannedNode> {
+    fn unescape(input: &str) -> AtomResult<String> {
+        let mut out = String::with_capacity(input.len());
+        let mut chars = input.char_indices().peekable();
+
+        while let Some((i, c)) = chars.next() {
+            if c != '\\' {
+                out.push(c);
+                continue;
+            }
+
+            let Some((_, esc)) = chars.next() else {
+                return Err(AtomError::TrailingBackslash);
+            };
+
+            match esc {
+                'n' => out.push('\n'),
+                'r' => out.push('\r'),
+                't' => out.push('\t'),
+                '0' => out.push('\0'),
+                '\\' => out.push('\\'),
+                '\'' => out.push('\''),
+                '"' => out.push('"'),
+                'a' => out.push('\x07'),
+                'b' => out.push('\x08'),
+                'f' => out.push('\x0c'),
+                'v' => out.push('\x0b'),
+                other => {
+                    return Err(AtomError::InvalidEscape {
+                        index: i,
+                        ch: other,
+                    });
+                }
+            }
+        }
+
+        Ok(out)
+    }
+
+    fn parse_token(&mut self, token: Token) -> AtomResult<SpannedNode> {
         let start_span = token.span;
 
         let node = match token.kind {
@@ -104,7 +141,7 @@ impl<'a> Parser<'a> {
                 } else {
                     raw
                 };
-                Node::String(content.to_string())
+                Node::String(Self::unescape(content)?)
             }
 
             TokenKind::NumberLiteral => {
@@ -144,18 +181,26 @@ impl<'a> Parser<'a> {
             }
 
             // TODO: prefix while
-
             TokenKind::If => {
                 let then_br = self.parse_next_single_node("`then` branch")?;
 
-                let else_br = if self.peek_token().map_or(false, |t| t.kind == TokenKind::Else) {
+                let else_br = if self
+                    .peek_token()
+                    .map_or(false, |t| t.kind == TokenKind::Else)
+                {
                     self.next_token();
                     self.parse_next_single_node("`else` branch")?
                 } else {
-                    Spanned { node: Node::Block(vec![]), span: token.span }
+                    Spanned {
+                        node: Node::Block(vec![]),
+                        span: token.span,
+                    }
                 };
 
-                Node::If { then_br: Box::new(then_br), else_br: Box::new(else_br) }
+                Node::If {
+                    then_br: Box::new(then_br),
+                    else_br: Box::new(else_br),
+                }
             }
 
             other => {

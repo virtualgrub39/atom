@@ -7,8 +7,12 @@ $reverse [
     [ dup #nil?! not ]
     [
         #decons! swap
-        >T swap :: <T
+        >T :: <T
     ] whiledo
 
     drop
 ]
+
+(1 2 3)
+dup out
+#reverse! out

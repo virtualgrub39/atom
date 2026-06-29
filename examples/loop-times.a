@@ -2,8 +2,9 @@ $println [ out "\r\n" out ]
 
 1
 [
-    dup string "I love Hatsune Miku x" over ++
+    >I
+    "I love Hatsune Miku x" <I string ++
     #println ! -- '!' is shorthand for 'eval'
-    1+
+    1 <I +
 ] 10 times
 drop
