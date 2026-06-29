@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use crate::atom::{Atom, AtomError, AtomRef, AtomResult, Opcode, bytecode};
+use crate::atom::{Atom, AtomError, AtomRef, AtomResult, AtomTag, Opcode, bytecode};
 
 struct ExecFrame {
     bytecode_atom: AtomRef,
@@ -24,6 +24,51 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
+    pub fn load_atom_file(&mut self, bytes: &[u8]) -> AtomResult<()> {
+        let mut reader = bytecode::Reader::new(bytes);
+
+        let magic = reader.fetch_vec(4)?;
+        if magic != b"ATOM" {
+            return Err(AtomError::InvalidMagic);
+        }
+
+        let count = reader.fetch::<u32>()?;
+
+        for _ in 0..count {
+            let key: Rc<str> = Rc::from(reader.fetch_str()?);
+            let value = self.deserialize_atom(&mut reader)?;
+            self.env.insert(key, value);
+        }
+
+        Ok(())
+    }
+
+    pub fn deserialize_atom(&mut self, reader: &mut bytecode::Reader) -> AtomResult<AtomRef> {
+        let tag = reader.fetch::<u8>()?;
+        let tag = AtomTag::try_from(tag).map_err(|_| AtomError::MalformedBytecode)?;
+
+        match tag {
+            AtomTag::Nil => Ok(Atom::nil()),
+            AtomTag::Num => {
+                let num = reader.fetch::<f64>()?;
+                Ok(Atom::num(num))
+            }
+            AtomTag::Str => {
+                let s: Rc<str> = Rc::from(reader.fetch_str()?);
+                Ok(Atom::string(s.to_string()))
+            }
+            AtomTag::Cons => {
+                let head = self.deserialize_atom(reader)?;
+                let tail = self.deserialize_atom(reader)?;
+                Ok(Atom::cons(head, tail))
+            }
+            AtomTag::Blob => {
+                let bytes = reader.fetch_vec(reader.len())?;
+                Ok(Atom::blob(bytes))
+            }
+        }
+    }
+
     pub fn new() -> Interpreter {
         Self {
             stack: Vec::new(),

@@ -28,6 +28,22 @@ impl Readable for i16 {
     }
 }
 
+impl Readable for u32 {
+    const SIZE: usize = 4;
+    fn from_bytes(bytes: &[u8]) -> Self {
+        u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+    }
+}
+
+impl Readable for f64 {
+    const SIZE: usize = 8;
+    fn from_bytes(bytes: &[u8]) -> Self {
+        f64::from_le_bytes([
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+        ])
+    }
+}
+
 pub struct Reader<'a> {
     data: &'a [u8],
 }

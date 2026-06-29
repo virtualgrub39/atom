@@ -29,6 +29,8 @@ pub enum AtomError {
     InvalidEnvId(Rc<str>),
     #[error("Invalid opcode")]
     InvalidOpcode(#[from] TryFromPrimitiveError<Opcode>),
+    #[error("Invalid magic number")]
+    InvalidMagic,
     #[error("Syntax error at {line}:{column}: {message}")]
     SyntaxError {
         message: String,
@@ -109,9 +111,29 @@ impl Atom {
             Self::Num(n) => *n != 0.,
         }
     }
+
+    pub fn tag(&self) -> AtomTag {
+        match self {
+            Atom::Nil => AtomTag::Nil,
+            Atom::Num(_) => AtomTag::Num,
+            Atom::Str(_) => AtomTag::Str,
+            Atom::Cons(_, _) => AtomTag::Cons,
+            Atom::Blob(_) => AtomTag::Blob,
+        }
+    }
 }
 
 use num_enum::TryFromPrimitive;
+
+#[derive(TryFromPrimitive, Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum AtomTag {
+    Nil = 0,
+    Num = 1,
+    Str = 2,
+    Cons = 3,
+    Blob = 4,
+}
 
 #[derive(TryFromPrimitive, Clone, Copy)]
 #[repr(u8)]
