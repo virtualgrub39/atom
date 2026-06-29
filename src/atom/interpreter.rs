@@ -83,11 +83,7 @@ impl Interpreter {
         Ok(writer.finish())
     }
 
-    pub fn serialize_atom(
-        &self,
-        atom: AtomRef,
-        writer: &mut bytecode::Writer,
-    ) -> AtomResult<()> {
+    pub fn serialize_atom(&self, atom: AtomRef, writer: &mut bytecode::Writer) -> AtomResult<()> {
         match &*atom {
             Atom::Nil => {
                 writer.write::<AtomTag>(AtomTag::Nil);
@@ -258,6 +254,19 @@ impl Interpreter {
                 Ok(())
             }
             Opcode::Not => self.pop().map(|a| self.push_bool(!a.truthful())),
+            Opcode::And => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                self.push_bool(a.truthful() && b.truthful());
+                Ok(())
+            }
+            Opcode::Or => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                self.push_bool(a.truthful() || b.truthful());
+
+                Ok(())
+            }
 
             Opcode::Join => {
                 let b = self.pop()?;

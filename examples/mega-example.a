@@ -56,16 +56,28 @@ $reverse [
 
 (1 2 3) #reverse! #println!
 
-$logged [
-    >target
-
-    [ "-> Starting execution\r\n" out ]
-    <target ++
-    [ "-> Finished execution\r\n" out ] ++
+$traced [
+    >F >label
+    [
+        dup <label out " <= " out #println!
+        <F !
+        dup <label out " => " out #println!
+    ]
 ]
 
-$logged_calc [[ 5 5 * #println! ] #logged!!]
-#logged_calc!
+$traced [
+    >F >label >val
+    <val dup <label out " <- " out #println!
+    <F!
+    dup <label out " -> " out #println!
+]
+
+$fib.t [ 
+    >n
+    <n "fib" #fib_linear #traced!
+]
+
+10 #fib.t! drop
 
 $unroll [
     >block >N
@@ -159,3 +171,6 @@ $factorial [
 ]
 
 6 #factorial! #println!
+
+-- count numbers from 1 to 100, that are divisible by 3 and by 7
+100 #range! [ dup >x 3 % 0 eq <x 7 % 0 eq and ] #map! 0 [ + ] #foldl! #println!

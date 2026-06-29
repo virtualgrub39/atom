@@ -171,6 +171,8 @@ pub enum Opcode {
     Gte,
     Eq,
     Not,
+    And,
+    Or,
 
     Eval,
     IfThenElse,
@@ -212,6 +214,8 @@ impl From<Builtin> for Opcode {
             Builtin::Gte => Opcode::Gte,
             Builtin::Eq => Opcode::Eq,
             Builtin::Not => Opcode::Not,
+            Builtin::Or => Opcode::Or,
+            Builtin::And => Opcode::And,
             Builtin::Eval => Opcode::Eval,
             Builtin::IfThenElse => Opcode::IfThenElse,
             Builtin::IfThen => Opcode::IfThen,

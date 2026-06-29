@@ -55,6 +55,8 @@ pub enum TokenKind {
     Lte,
     Eq,
     Not,
+    And,
+    Or,
     Nip,
     Drop,
     This,
@@ -293,6 +295,8 @@ impl<'a> Lexer<'a> {
             "while" => TokenKind::While,
             "whiledo" => TokenKind::WhileDo,
             "not" => TokenKind::Not,
+            "and" => TokenKind::And,
+            "or" => TokenKind::Or,
             _ => TokenKind::Invalid,
         }
     }
