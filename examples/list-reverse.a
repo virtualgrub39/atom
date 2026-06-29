@@ -4,10 +4,11 @@ $decons [ dup head >H tail <H ]
 $reverse [
     () swap
 
-    [ dup #nil?! not ] while [
+    [ dup #nil?! not ]
+    [
         #decons! swap
         >T swap :: <T
-    ]
+    ] whiledo
 
     drop
 ]

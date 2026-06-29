@@ -30,7 +30,7 @@ pub enum Node {
     String(String),
     Nil,
 
-    Builtin(Builtin),
+    Builtin(Builtin), // pure "words" - postfix operations
 
     WordRef(String),
     BindVar(String),
@@ -48,19 +48,11 @@ pub enum Node {
         then_br: Box<SpannedNode>,
         else_br: Box<SpannedNode>,
     },
-
-    While {
-        cond: Box<SpannedNode>,
-        body: Box<SpannedNode>,
-    },
-
-    Times(Box<SpannedNode>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Builtin {
     Out,
-    Times,
     Dup,
     Over,
     Lt,
@@ -79,6 +71,10 @@ pub enum Builtin {
     Eval, // !
     Cons, // ::
     Join, // ++
+    Times,
+    WhileDo,
+    IfThen,
+    IfThenElse,
 }
 
 pub struct Parser<'a> {
@@ -110,6 +106,57 @@ impl<'a> Parser<'a> {
                     raw
                 };
                 Node::String(content.to_string())
+            }
+
+            TokenKind::NumberLiteral => {
+                let raw = self.lexeme(&token);
+                let val = raw.parse::<f64>().map_err(|_| {
+                    self.error(
+                        token.span,
+                        format!("Failed to parse number literal: {}", raw),
+                    )
+                })?;
+                Node::Number(val)
+            }
+
+            TokenKind::Nil => Node::Nil,
+
+            TokenKind::DollarIdent => {
+                let name = self.lexeme(&token)[1..].to_string();
+                let body = self.parse_next_single_node("definition body")?;
+                Node::Define {
+                    name,
+                    body: Box::new(body),
+                }
+            }
+            TokenKind::HashIdent => Node::WordRef(self.lexeme(&token)[1..].to_string()),
+            TokenKind::GreaterIdent => Node::BindVar(self.lexeme(&token)[1..].to_string()),
+            TokenKind::LessIdent => Node::FetchVar(self.lexeme(&token)[1..].to_string()),
+
+            TokenKind::LQuote => {
+                let block_nodes = self.parse_stream(Some(TokenKind::RQuote))?;
+                self.next_token();
+                Node::Block(block_nodes)
+            }
+            TokenKind::LList => {
+                let list_nodes = self.parse_stream(Some(TokenKind::RList))?;
+                self.next_token();
+                Node::List(list_nodes)
+            }
+
+            // TODO: prefix while
+
+            TokenKind::If => {
+                let then_br = self.parse_next_single_node("`then` branch")?;
+
+                let else_br = if self.peek_token().map_or(false, |t| t.kind == TokenKind::Else) {
+                    self.next_token();
+                    self.parse_next_single_node("`else` branch")?
+                } else {
+                    Spanned { node: Node::Block(vec![]), span: token.span }
+                };
+
+                Node::If { then_br: Box::new(then_br), else_br: Box::new(else_br) }
             }
 
             other => {
@@ -166,6 +213,10 @@ impl<'a> Parser<'a> {
             TokenKind::Bang => Some(Builtin::Eval),
             TokenKind::Cons => Some(Builtin::Cons),
             TokenKind::Join => Some(Builtin::Join),
+            TokenKind::WhileDo => Some(Builtin::WhileDo),
+            TokenKind::Times => Some(Builtin::Times),
+            TokenKind::Ift => Some(Builtin::IfThen),
+            TokenKind::Ifte => Some(Builtin::IfThenElse),
             _ => None,
         }
     }
@@ -289,21 +340,6 @@ impl DisplayWithSrc for Node {
                 writeln!(f)?;
                 write!(f, "{pad}  else: ")?;
                 else_br.fmt_with_src(f, src, indent + 1)?;
-                write!(f, "\n{pad}}}")
-            }
-            Node::While { cond, body } => {
-                writeln!(f, "While {{")?;
-                write!(f, "{pad}  cond: ")?;
-                cond.fmt_with_src(f, src, indent + 1)?;
-                writeln!(f)?;
-                write!(f, "{pad}  body: ")?;
-                body.fmt_with_src(f, src, indent + 1)?;
-                write!(f, "\n{pad}}}")
-            }
-            Node::Times(body) => {
-                writeln!(f, "Times {{")?;
-                write!(f, "{pad}  ")?;
-                body.fmt_with_src(f, src, indent + 1)?;
                 write!(f, "\n{pad}}}")
             }
         }

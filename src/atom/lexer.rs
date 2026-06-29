@@ -49,6 +49,8 @@ pub enum TokenKind {
     Over,
     If,
     Else,
+    Ift,
+    Ifte,
     Lt,
     Lte,
     Eq,
@@ -62,6 +64,7 @@ pub enum TokenKind {
     Tail,
     Swap,
     While,
+    WhileDo,
     // Symbols
     LQuote,
     RQuote,
@@ -260,6 +263,8 @@ impl<'a> Lexer<'a> {
             "string" => TokenKind::String,
             "if" => TokenKind::If,
             "else" => TokenKind::Else,
+            "ift" => TokenKind::Ift,
+            "ifte" => TokenKind::Ifte,
             "lt" => TokenKind::Lt,
             "lte" => TokenKind::Lte,
             "nip" => TokenKind::Nip,
@@ -271,6 +276,7 @@ impl<'a> Lexer<'a> {
             "tail" => TokenKind::Tail,
             "swap" => TokenKind::Swap,
             "while" => TokenKind::While,
+            "whiledo" => TokenKind::WhileDo,
             "not" => TokenKind::Not,
             _ => TokenKind::Invalid,
         }
