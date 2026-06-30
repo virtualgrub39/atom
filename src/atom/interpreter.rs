@@ -2,6 +2,78 @@ use std::{collections::HashMap, io, rc::Rc};
 
 use crate::atom::{Atom, AtomError, AtomRef, AtomResult, AtomTag, Opcode, bytecode};
 
+use libffi::middle::{self, Cif, CodePtr, Type, arg};
+use std::ffi::{CString, c_char, c_void};
+
+fn ptr_to_atom(p: *mut c_void) -> AtomRef {
+    Atom::num(f64::from_bits(p as u64))
+}
+fn atom_to_ptr(a: &AtomRef) -> AtomResult<*mut c_void> {
+    match &**a {
+        Atom::Num(n) => Ok(n.to_bits() as usize as *mut c_void),
+        _ => Err(AtomError::TypeMismatch),
+    }
+}
+
+fn ffi_type_of(tag: &str) -> AtomResult<Type> {
+    Ok(match tag {
+        "void" => Type::void(),
+        "int" => Type::c_int(),
+        "i64" => Type::i64(),
+        "double" | "f64" => Type::f64(),
+        "string" | "ptr" => Type::pointer(),
+        other => return Err(AtomError::UnboundVariable(other.into())),
+    })
+}
+
+enum Native {
+    I32(i32),
+    I64(i64),
+    F64(f64),
+    Ptr(*mut c_void),
+    CStr { _owner: CString, ptr: *const c_char },
+}
+
+impl Native {
+    fn from_atom(atom: &AtomRef, tag: &str) -> AtomResult<Native> {
+        Ok(match tag {
+            "int" => Native::I32(match &**atom {
+                Atom::Num(n) => *n as i32,
+                _ => return Err(AtomError::TypeMismatch),
+            }),
+            "i64" => Native::I64(match &**atom {
+                Atom::Num(n) => *n as i64,
+                _ => return Err(AtomError::TypeMismatch),
+            }),
+            "double" | "f64" => Native::F64(match &**atom {
+                Atom::Num(n) => *n,
+                _ => return Err(AtomError::TypeMismatch),
+            }),
+            "ptr" => Native::Ptr(atom_to_ptr(atom)?),
+            "string" => {
+                let s = match &**atom {
+                    Atom::Str(s) => s.clone(),
+                    _ => return Err(AtomError::TypeMismatch),
+                };
+                let owner = CString::new(s).map_err(|_| AtomError::InvalidCasts)?;
+                let ptr = owner.as_ptr();
+                Native::CStr { _owner: owner, ptr }
+            }
+            other => return Err(AtomError::UnboundVariable(other.into())),
+        })
+    }
+
+    fn as_ffi_arg(&self) -> middle::Arg<'_> {
+        match self {
+            Native::I32(v) => arg(v),
+            Native::I64(v) => arg(v),
+            Native::F64(v) => arg(v),
+            Native::Ptr(p) => arg(p),
+            Native::CStr { ptr, .. } => arg(ptr),
+        }
+    }
+}
+
 struct ExecFrame {
     bytecode_atom: AtomRef,
     ip: usize,
@@ -507,7 +579,55 @@ impl Interpreter {
                 Ok(())
             }
             Opcode::DLCall => {
-                todo!("DLCall not implemented yet")
+                let fn_ptr = atom_to_ptr(&self.pop()?)?;
+                let ret_tag = self.pop_string()?;
+                let arg_tags = self.pop_string_list()?;
+
+                let n = arg_tags.len();
+                if self.stack.len() < n {
+                    return Err(AtomError::StackUnderflow);
+                }
+                let arg_atoms = self.stack.split_off(self.stack.len() - n);
+
+                let natives: Vec<Native> = arg_atoms
+                    .iter()
+                    .zip(arg_tags.iter())
+                    .map(|(a, t)| Native::from_atom(a, t))
+                    .collect::<AtomResult<_>>()?;
+                let ffi_args: Vec<middle::Arg> = natives.iter().map(Native::as_ffi_arg).collect();
+                let arg_types: Vec<Type> = arg_tags
+                    .iter()
+                    .map(|t| ffi_type_of(t))
+                    .collect::<AtomResult<_>>()?;
+
+                let cif = Cif::new(arg_types, ffi_type_of(&ret_tag)?);
+                let code = CodePtr::from_ptr(fn_ptr as *const c_void);
+
+                let result = unsafe {
+                    match ret_tag.as_str() {
+                        "void" => {
+                            cif.call::<()>(code, &ffi_args);
+                            Atom::nil()
+                        }
+                        "int" => Atom::num(cif.call::<i32>(code, &ffi_args) as f64),
+                        "i64" => Atom::num(cif.call::<i64>(code, &ffi_args) as f64),
+                        "double" | "f64" => Atom::num(cif.call::<f64>(code, &ffi_args)),
+                        "string" => {
+                            let p: *mut c_char = cif.call(code, &ffi_args);
+                            if p.is_null() {
+                                Atom::nil()
+                            } else {
+                                Atom::string(
+                                    std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned(),
+                                )
+                            }
+                        }
+                        "ptr" => ptr_to_atom(cif.call(code, &ffi_args)),
+                        other => return Err(AtomError::UnboundVariable(other.into())),
+                    }
+                };
+                self.stack.push(result);
+                Ok(())
             }
         }
     }
