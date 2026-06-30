@@ -14,4 +14,4 @@ $fib_linear [
     ]
 ]
 
-25 #fib_linear! out
+in number #fib_linear! out

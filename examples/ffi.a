@@ -1,0 +1,12 @@
+"libc.so.6" dlopen >_libc
+
+<_libc "puts" dlsym >_libc_puts
+
+$libc.puts [
+    ("string")
+    "int"
+    <_libc_puts
+    dlcall
+]
+
+"Hello from THE Atom language!" #libc.puts!

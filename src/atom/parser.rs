@@ -53,6 +53,7 @@ pub enum Node {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Builtin {
     Out,
+    In,
     Dup,
     Over,
     Lt,
@@ -67,6 +68,7 @@ pub enum Builtin {
     Drop,
     This,
     StringCast,
+    NumberCast,
     Head,
     Tail,
     Swap,
@@ -82,6 +84,9 @@ pub enum Builtin {
     WhileDo,
     IfThen,
     IfThenElse,
+    DLCall,
+    DLOpen,
+    DLSym,
 }
 
 pub struct Parser<'a> {
@@ -243,6 +248,7 @@ impl<'a> Parser<'a> {
     fn match_builtin(&self, kind: TokenKind) -> Option<Builtin> {
         match kind {
             TokenKind::Out => Some(Builtin::Out),
+            TokenKind::In => Some(Builtin::In),
             TokenKind::Dup => Some(Builtin::Dup),
             TokenKind::Over => Some(Builtin::Over),
             TokenKind::Lt => Some(Builtin::Lt),
@@ -255,6 +261,7 @@ impl<'a> Parser<'a> {
             TokenKind::Drop => Some(Builtin::Drop),
             TokenKind::This => Some(Builtin::This),
             TokenKind::String => Some(Builtin::StringCast),
+            TokenKind::Number => Some(Builtin::NumberCast),
             TokenKind::Head => Some(Builtin::Head),
             TokenKind::Tail => Some(Builtin::Tail),
             TokenKind::Swap => Some(Builtin::Swap),
@@ -270,6 +277,9 @@ impl<'a> Parser<'a> {
             TokenKind::Times => Some(Builtin::Times),
             TokenKind::Ift => Some(Builtin::IfThen),
             TokenKind::Ifte => Some(Builtin::IfThenElse),
+            TokenKind::DLOpen => Some(Builtin::DLOpen),
+            TokenKind::DLCall => Some(Builtin::DLCall),
+            TokenKind::DLSym => Some(Builtin::DLSym),
             _ => None,
         }
     }

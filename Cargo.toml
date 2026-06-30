@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 thiserror = "*"
 num_enum = "*"
+libloading = "*"
+libffi = "*"

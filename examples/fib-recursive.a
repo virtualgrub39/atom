@@ -8,4 +8,4 @@ $fib_rec [
     ifte -- postfix conditional. `ift` for no-else variant
 ]
 
-25 #fib_rec! out
+in number #fib_rec! out

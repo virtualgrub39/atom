@@ -44,6 +44,7 @@ pub enum TokenKind {
     HashIdent,
     // Keywords
     Out,
+    In,
     Times,
     Dup,
     Over,
@@ -61,12 +62,16 @@ pub enum TokenKind {
     Drop,
     This,
     String,
+    Number,
     Nil,
     Head,
     Tail,
     Swap,
     While,
     WhileDo,
+    DLCall,
+    DLSym,
+    DLOpen,
     // Symbols
     LQuote,
     RQuote,
@@ -274,10 +279,12 @@ impl<'a> Lexer<'a> {
 
         match word {
             "out" => TokenKind::Out,
+            "in" => TokenKind::In,
             "over" => TokenKind::Over,
             "times" => TokenKind::Times,
             "dup" => TokenKind::Dup,
             "string" => TokenKind::String,
+            "number" => TokenKind::Number,
             "if" => TokenKind::If,
             "else" => TokenKind::Else,
             "ift" => TokenKind::Ift,
@@ -297,6 +304,9 @@ impl<'a> Lexer<'a> {
             "not" => TokenKind::Not,
             "and" => TokenKind::And,
             "or" => TokenKind::Or,
+            "dlopen" => TokenKind::DLOpen,
+            "dlsym" => TokenKind::DLSym,
+            "dlcall" => TokenKind::DLCall,
             _ => TokenKind::Invalid,
         }
     }

@@ -10,7 +10,7 @@ pub use parser::{Builtin, DisplayWithSrc, Node, Parser, Program, Spanned};
 mod compiler;
 pub use compiler::Compiler;
 
-use std::{fmt, rc::Rc};
+use std::{fmt, io, rc::Rc};
 
 use num_enum::TryFromPrimitiveError;
 use thiserror::Error;
@@ -41,6 +41,12 @@ pub enum AtomError {
     InvalidEscape { index: usize, ch: char },
     #[error("Trailing backslash in string literal")]
     TrailingBackslash,
+    #[error("Invalid cast")]
+    InvalidCasts,
+    #[error("IO Error")]
+    IOError(#[from] io::Error),
+    #[error("Dynamic library loading error")]
+    LibLoadingError(#[from] libloading::Error),
     #[error("Syntax error at {line}:{column}: {message}")]
     SyntaxError {
         message: String,
@@ -164,6 +170,10 @@ pub enum Opcode {
     This,
 
     Out,
+    In,
+    DLCall,
+    DLOpen,
+    DLSym,
 
     Lt,
     Lte,
@@ -186,6 +196,7 @@ pub enum Opcode {
     DropRet,
 
     StringCast,
+    NumberCast,
 
     Dup,
     Swap,
@@ -208,6 +219,7 @@ impl From<Builtin> for Opcode {
             Builtin::Tail => Opcode::Tail,
             Builtin::This => Opcode::This,
             Builtin::Out => Opcode::Out,
+            Builtin::In => Opcode::In,
             Builtin::Lt => Opcode::Lt,
             Builtin::Lte => Opcode::Lte,
             Builtin::Gt => Opcode::Gt,
@@ -221,6 +233,10 @@ impl From<Builtin> for Opcode {
             Builtin::IfThen => Opcode::IfThen,
             Builtin::WhileDo => Opcode::WhileDo,
             Builtin::Times => Opcode::DoTimes,
+            Builtin::DLCall => Opcode::DLCall,
+            Builtin::DLOpen => Opcode::DLOpen,
+            Builtin::DLSym => Opcode::DLSym,
+
             // Builtin::Halt => Opcode::Halt,
 
             // Builtin::ToRet => Opcode::ToRet,
@@ -228,6 +244,7 @@ impl From<Builtin> for Opcode {
             // Builtin::DropRet => Opcode::DropRet,
 
             Builtin::StringCast => Opcode::StringCast,
+            Builtin::NumberCast => Opcode::NumberCast,
 
             Builtin::Dup => Opcode::Dup,
             Builtin::Swap => Opcode::Swap,

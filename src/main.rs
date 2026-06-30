@@ -19,7 +19,7 @@ fn main() -> AtomResult<()> {
 
     let src = fs::read_to_string(path).expect("Failed to read file");
     let prog = atom::Program::parse(&src)?;
-    // println!("{}", prog.display(&src));
+    println!("{}", prog.display(&src));
 
     let e = Compiler::new().compile(&prog.nodes)?;
     let e = e
@@ -27,7 +27,7 @@ fn main() -> AtomResult<()> {
         .map(|(k, v)| (k.into(), v))
         .collect::<HashMap<_, _>>();
 
-    // println!("Compiled environment: {:?}", e);
+    println!("Compiled environment: {:?}", e);
 
     let mut vm = Interpreter::new();
     vm.import(e);

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, io, rc::Rc};
 
 use crate::atom::{Atom, AtomError, AtomRef, AtomResult, AtomTag, Opcode, bytecode};
 
@@ -141,6 +141,53 @@ impl Interpreter {
         }
     }
 
+    fn pop_string(&mut self) -> AtomResult<String> {
+        match &*self.pop()? {
+            Atom::Str(n) => Ok(n.clone()),
+            _ => Err(AtomError::TypeMismatch),
+        }
+    }
+
+    fn pop_blob(&mut self) -> AtomResult<Vec<u8>> {
+        match &*self.pop()? {
+            Atom::Blob(n) => Ok(n.clone()),
+            _ => Err(AtomError::TypeMismatch),
+        }
+    }
+
+    fn flatten_list(atom: AtomRef, list: &mut Vec<AtomRef>) -> AtomResult<()> {
+        match &*atom {
+            Atom::Cons(head, tail) => {
+                list.push(head.clone());
+                Self::flatten_list(tail.clone(), list)?;
+            }
+            Atom::Nil => {}
+            _ => {
+                list.push(atom.clone());
+            }
+        }
+        Ok(())
+    }
+
+    fn pop_string_list(&mut self) -> AtomResult<Vec<String>> {
+        let mut list = Vec::new();
+        Self::flatten_list(self.pop()?, &mut list)?;
+
+        let list: Vec<String> = match list
+            .iter()
+            .map(|i| match &**i {
+                Atom::Str(s) => Ok(s.clone()),
+                _ => Err(AtomError::TypeMismatch),
+            })
+            .collect::<Result<Vec<_>, _>>()
+        {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
+
+        Ok(list)
+    }
+
     fn push_num(&mut self, n: f64) {
         self.stack.push(Atom::num(n));
     }
@@ -236,6 +283,12 @@ impl Interpreter {
             Opcode::StringCast => self
                 .pop()
                 .map(|a| self.stack.push(Atom::string(a.to_string()))),
+            Opcode::NumberCast => {
+                let a = self.pop()?.to_string();
+                let a = a.parse::<f64>().map_err(|_| AtomError::InvalidCasts)?;
+                self.stack.push(Atom::num(a));
+                Ok(())
+            }
 
             Opcode::Add => self.apply_num_op(|a, b| a + b),
             Opcode::Sub => self.apply_num_op(|a, b| a - b),
@@ -310,6 +363,15 @@ impl Interpreter {
                 _ => Err(AtomError::TypeMismatch),
             },
             Opcode::Out => self.pop().map(|val| print!("{val}")),
+            Opcode::In => {
+                let mut line = String::new();
+                io::stdin()
+                    .read_line(&mut line)
+                    .map_err(|e| AtomError::IOError(e))?;
+                let line = line.trim();
+                self.stack.push(Atom::str(line));
+                Ok(())
+            }
             Opcode::PushEnv => {
                 let id_ref: Rc<str> = Rc::from(reader.fetch_str()?);
                 let a = self
@@ -423,6 +485,30 @@ impl Interpreter {
                 Ok(())
             }
             Opcode::Halt => Err(AtomError::Halt),
+            Opcode::DLOpen => {
+                let path = self.pop_string()?;
+                let lib = unsafe { libloading::Library::new(&path) }?;
+                let addr = Box::into_raw(Box::new(lib)) as usize as f64;
+                self.push_num(addr);
+                Ok(())
+            }
+            Opcode::DLSym => {
+                let sym_name = self.pop_string()?;
+                let lib_addr = self.pop_num()? as usize as *mut libloading::Library;
+
+                let func_symbol = unsafe { (*lib_addr).get::<*const ()>(sym_name.as_bytes()) }
+                    .map_err(|_| AtomError::UnboundVariable(sym_name))?;
+
+                let raw_ptr = *func_symbol as usize;
+
+                let func_addr = f64::from_bits(raw_ptr as u64);
+
+                self.push_num(func_addr);
+                Ok(())
+            }
+            Opcode::DLCall => {
+                todo!("DLCall not implemented yet")
+            }
         }
     }
 }
